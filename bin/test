@@ -1,0 +1,224 @@
+#!/usr/bin/env ruby
+# 
+require 'tmpdir'
+require 'open3'
+
+$bp_dir=Dir.pwd
+$capture_stdout = ""
+$capture_stderr = ""
+$compile_dir = ""
+$last_exit = 0
+$test_count = 0
+$success = 0
+$fail = 0
+
+def runtest(name) 
+  if $compile_dir != ""
+    FileUtils.rm_rf $compile_dir
+    $compile_dir = ""
+  end
+  puts name
+  $test_count += 1
+end
+
+def mktmpdir()
+  return Dir.mktmpdir("test")
+end
+
+def detect(file)
+  command = $bp_dir + "/bin/detect"
+  arg = $bp_dir + "/test/" + file
+  Open3.popen3("#{command} #{arg}") do |stdin, stdout, stderr, wait_thr|
+    pid = wait_thr.pid # pid of the started process.
+    $capture_stdout = stdout.read
+    $capture_stderr = stderr.read
+    $last_exit = wait_thr.value #Process status object
+  end
+end
+
+def compile(file, cache = nil)
+  $compile_dir=mktmpdir()
+  %x["cp" "-r" "#{$bp_dir}/test/#{file}/." "#{$compile_dir}"]
+  cmd = $bp_dir + "/bin/compile"
+  arg1 = $compile_dir
+  if cache.nil?
+    arg2 = mktmpdir()
+  else
+    arg2 = cache
+  end
+  Open3.popen3("#{cmd} #{arg1} #{arg2}") do |stdin, stdout, stderr, wait_thr|
+    pid = wait_thr.pid # pid of the started process.
+    $capture_stdout = stdout.read
+    $capture_stderr = stderr.read
+    $last_exit = wait_thr.value #Process status object
+  end
+  if cache.nil?
+    FileUtils.rm_rf arg2
+  end
+end
+
+def assertCaptured(string)
+  if !($capture_stdout.include? string)
+    puts "Expected to find " + string
+    $fail += 1
+  end
+end
+
+def assertNotCaptured(string)
+  if $capture_stdout.include? string
+    puts "Expected to find " + string
+    $fail += 1
+  end
+end
+
+def assertCapturedSuccess
+  if $last_exit.exitstatus != 0 
+    puts "Exit code " + $last_exit.inspect
+    $fail += 1
+  else
+    $success += 1
+  end
+end
+
+def assertCapturedError(code, stderr)
+  if $last_exit.exitstatus != code 
+    puts "Exit code " + $last_exit.inspect
+    $fail +=1
+    return
+  end
+  if $capture_stderr != stderr
+    puts "Stderr " + stderr
+    $fail +=1
+    return
+  end
+  $success += 1
+end
+
+def assertFile(string, file)
+  if !(File.open($compile_dir + "/"+ file).read.chomp.eql? string)
+    puts "FileContents " + string
+    puts File.open($compile_dir + "/"+ file).read
+    $fail +=1
+  end
+end
+
+def assertEquals(string1, string2)
+  if string1 != string2
+    puts "Not equal" + string1
+    $fail += 1
+  end
+end
+
+#
+# Start of tests
+#
+
+runtest "testDetectWithPackageJson"
+  detect "stable-node"
+  assertCaptured "Node.js"
+  assertCapturedSuccess
+
+runtest "testDetectWithoutPackageJson"
+  detect "no-package-json"
+  assertCapturedError 1, ""
+
+runtest "testNoVersion"
+  compile "no-version"
+  assertCaptured "PRO TIP: Specify a node version in package.json"
+  assertCaptured "Defaulting to latest stable node"
+  assertCapturedSuccess
+
+runtest "testDangerousRangeStar"
+  compile "dangerous-range-star"
+  assertCaptured "PRO TIP: Avoid using semver ranges like '*'"
+  assertCaptured "Requested node range:  *"
+  assertCaptured "Resolved node version: 0.10"
+  assertCapturedSuccess
+
+runtest "testDangerousRangeGreaterThan"
+  compile "dangerous-range-greater-than"
+  assertCaptured "PRO TIP: Avoid using semver ranges starting with '>'"
+  assertCaptured "Requested node range:  >"
+  assertCaptured "Resolved node version: 0.10."
+  assertCapturedSuccess
+
+runtest "testRangeWithSpace"
+  compile "range-with-space"
+  assertCaptured "Requested node range:  >= 0.8.x"
+  assertCaptured "Resolved node version: 0.10."
+  assertCapturedSuccess
+
+runtest "testStableVersion"
+  compile "stable-node"
+  assertNotCaptured "PRO TIP: Avoid using semver"
+  assertNotCaptured "PRO TIP: Specify"
+  assertCaptured "Resolved node version"
+  assertCapturedSuccess
+
+runtest "testUnstableVersion"
+  compile "unstable-version"
+  assertCaptured "Requested node range:  >0.11.0"
+  assertCaptured "Resolved node version: 0.11."
+  assertCapturedSuccess
+
+runtest "testProfileCreated"
+  compile "stable-node"
+  assertCaptured "Building runtime environment"
+  assertFile "export PATH=\"\$HOME/vendor/node/bin:\$HOME/bin:\$HOME/node_modules/.bin:\$PATH\"", ".profile.d/nodejs.sh"
+  assertCapturedSuccess
+
+runtest "testInvalidDependency"
+  compile "invalid-dependency"
+  assertCaptured "not in the npm registry"
+  assertCapturedError 1, ""
+
+runtest "testNodeModulesCached"
+  cache=mktmpdir()
+  compile "caching", cache
+  assertCaptured "Caching node"
+  assertEquals "1", %x["sh" "-c" "ls -1 #{cache}/ | wc -l"].chomp
+  FileUtils.rm_rf cache
+
+runtest "testModulesCheckedIn"
+  compile "modules-checked-in"
+  assertCaptured "Found existing node_modules directory; skipping cache"
+  assertCaptured "Rebuilding any native dependencies"
+  assertCapturedSuccess
+
+runtest "testUserConfig"
+  compile "userconfig"
+  assertCaptured "https://www.google.com/"
+  assertCaptured "registry error"
+  assertCapturedError 1, ""
+
+runtest "testProcfileAbsentNpmStartPresent"
+  compile "procfile-absent-npm-start-present"
+  assertCaptured "No Procfile found; Adding npm start to new Procfile"
+  assertFile "web: npm start", "Procfile"
+  assertCapturedSuccess
+
+runtest "testProcfileAbsentNpmStartAbsent"
+  compile "procfile-absent-npm-start-absent"
+  assertCaptured "Create a Procfile or specify a start script in package.json"
+  assertCapturedSuccess
+
+runtest "testV01021"
+  compile "v0.10.21"
+  assertCaptured "Resolved node version"
+  assertCaptured "IBM"
+  assertCapturedSuccess
+
+#
+# end of tests
+#
+
+
+if $compile_dir != ""
+  FileUtils.rm_rf $compile_dir
+  $compile_dir = ""
+end
+
+puts "\nRan " + $test_count.to_s + " tests."
+puts "\nFAILED (failures=" + $fail.to_s + ")"
+
+exit $fail
