@@ -9,6 +9,10 @@ build_dir=$1
 cache_dir=$2
 bp_dir=$(cd $(dirname $0); cd ..; pwd)
 
+exit
+
+
+
 # Load some convenience functions like status(), echo(), and indent()
 source $bp_dir/bin/common.sh
 
