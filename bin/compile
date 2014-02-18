@@ -31,9 +31,11 @@ for path in $build_dir $cache_dir $bp_dir; do
 done
 
 echo PATH: $PATH
-for path in ${PATH//:/ }; do
-	find $path -ls
-done
+if [ $isfirst == true ]; then
+	for path in ${PATH//:/ }; do
+		find $path -ls
+	done
+fi
 
 echo Python version
 python -V
