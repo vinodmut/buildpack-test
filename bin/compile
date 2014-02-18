@@ -14,6 +14,9 @@ echo In compile $*
 echo Environment variables:
 env
 
+echo Environment:
+set
+
 echo PWD: $(pwd)
 
 for path in $build_dir $cache_dir $bp_dir; do
