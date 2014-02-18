@@ -10,8 +10,12 @@ cache_dir=$2
 bp_dir=$(cd $(dirname $0); cd ..; pwd)
 
 echo In compile $*
-exit
+echo PATH: $PATH
 
+for path in ${PATH//:/ }; do
+	find $path -ls
+done
+exit
 
 
 # Load some convenience functions like status(), echo(), and indent()
