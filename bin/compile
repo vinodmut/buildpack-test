@@ -25,5 +25,8 @@ echo PATH: $PATH
 for path in ${PATH//:/ }; do
 	find $path -ls
 done
-exit
+
+echo Python version
+python -V
+
 
