@@ -28,5 +28,5 @@ done
 
 echo Python version
 python -V
-python -m SimpleHTTPServer
+#python -m SimpleHTTPServer
 
