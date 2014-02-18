@@ -9,6 +9,12 @@ build_dir=$1
 cache_dir=$2
 bp_dir=$(cd $(dirname $0); cd ..; pwd)
 
+isfirst=true
+if [ -a "$cache_dir" ]; then
+	isfirst=false
+fi
+echo isfirst: $isfirst
+
 echo In compile $*
 
 echo Environment variables:
