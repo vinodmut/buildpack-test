@@ -14,6 +14,8 @@ echo In compile $*
 echo Environment variables:
 env
 
+echo PWD: $(pwd)
+
 for path in $build_dir $cache_dir $bp_dir; do
 	echo Contents of $path
 	find $path -ls
