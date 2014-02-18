@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # bin/detect <build-dir>
 
-#echo "no" && exit 1
+echo "Splice" && exit 0
 #exit
 
 if [ -f $1/package.json ]; then
