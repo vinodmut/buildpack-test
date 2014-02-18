@@ -9,6 +9,7 @@ build_dir=$1
 cache_dir=$2
 bp_dir=$(cd $(dirname $0); cd ..; pwd)
 
+echo Should do something here.
 exit
 
 
